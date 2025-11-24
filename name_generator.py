@@ -1,7 +1,7 @@
 import argparse
 import os
 import trimesh
-from typing import List, Optional
+from typing import List
 
 from mesh_utils import char_to_mesh
 
@@ -11,19 +11,20 @@ def name_to_stl(
     font_path: str,
     height: float,
     scale_factor: float,
-    output_path: str,
-    spacing: float = 0.1,
-) -> None:
+    spacing: float,
+) -> trimesh.Trimesh:
     """
-    Generates a single STL file for a given name by combining individual character meshes.
+    Generates a single combined mesh for a given name.
 
     Args:
         name (str): The name or word to generate.
         font_path (str): The file path to the .ttf or .otf font file.
         height (float): The desired Z-axis extrusion height (thickness).
         scale_factor (float): The factor by which to scale the characters.
-        output_path (str): The full path for the output STL file.
         spacing (float): The spacing between characters, as a fraction of the character width.
+
+    Returns:
+        trimesh.Trimesh: The combined 3D mesh object of the name, or None if generation fails.
     """
     meshes: List[trimesh.Trimesh] = []
     x_offset: float = 0.0
@@ -50,14 +51,13 @@ def name_to_stl(
         raise ValueError("No valid meshes generated.")
 
     # Combine all character meshes into a single mesh
-    combined_mesh = trimesh.util.concatenate(meshes)
-
-    # Export the combined mesh
-    combined_mesh.export(output_path)
-    print(f"Successfully generated and saved STL to {output_path}")
+    return trimesh.util.concatenate(meshes)
 
 
 if __name__ == "__main__":
+    GENERATED_DIR: str = "generated"
+    os.makedirs(GENERATED_DIR, exist_ok=True)
+
     parser = argparse.ArgumentParser(
         description="Generate a single 3D STL model for a given name."
     )
@@ -83,27 +83,23 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scale",
         type=float,
-        default=1.0,
+        default=0.03,
         help="The factor by which to scale the characters.",
-    )
-    parser.add_argument(
-        "--output",
-        type=str,
-        default="name.stl",
-        help="The name for the output STL file.",
     )
     parser.add_argument(
         "--spacing",
         type=float,
-        default=0.1,
+        default=-0.1,
         help="The spacing between characters, as a fraction of the character width.",
     )
 
-    args = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
 
-    output_dir = os.path.dirname(args.output)
-    os.makedirs(output_dir, exist_ok=True)
+    output_filename = f"{args.name}.stl"
+    output_path = os.path.join(GENERATED_DIR, output_filename)
 
-    name_to_stl(
-        args.name, args.font, args.height, args.scale, args.output, args.spacing
+    name_to_stl(args.name, args.font, args.height, args.scale, args.spacing).export(
+        output_path
     )
+
+    print(f"Successfully generated and saved STL to {output_path}")
