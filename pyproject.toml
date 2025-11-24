@@ -1,0 +1,18 @@
+[project]
+name = "keychain-stl"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "matplotlib>=3.10.7",
+    "numpy-stl>=3.2.0",
+    "numpy>=2.3.5",
+    "scipy>=1.16.3",
+    "trimesh>=4.9.0",
+    "fonttools>=4.60.1",
+    "shapely>=2.0.0",
+    "networkx>=3.0",
+    "mapbox-earcut>=1.0.0",
+    "rtree>=1.0.0",
+]
