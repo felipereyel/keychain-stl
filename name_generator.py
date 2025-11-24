@@ -12,6 +12,7 @@ def name_to_stl(
     height: float,
     scale_factor: float,
     spacing: float,
+    stagger: float,
 ) -> trimesh.Trimesh:
     """
     Generates a single combined mesh for a given name.
@@ -22,6 +23,7 @@ def name_to_stl(
         height (float): The desired Z-axis extrusion height (thickness).
         scale_factor (float): The factor by which to scale the characters.
         spacing (float): The spacing between characters, as a fraction of the character width.
+        stagger (float): The amount to add to the height of even-indexed characters.
 
     Returns:
         trimesh.Trimesh: The combined 3D mesh object of the name, or None if generation fails.
@@ -29,8 +31,9 @@ def name_to_stl(
     meshes: List[trimesh.Trimesh] = []
     x_offset: float = 0.0
 
-    for char in name:
-        mesh = char_to_mesh(char, font_path, height, scale_factor)
+    for i, char in enumerate(name):
+        current_height = height + i % 2 * stagger
+        mesh = char_to_mesh(char, font_path, current_height, scale_factor)
 
         # Get the character width to determine the offset for the next character
         char_width = mesh.bounds[1, 0] - mesh.bounds[0, 0]
@@ -92,14 +95,20 @@ if __name__ == "__main__":
         default=-0.1,
         help="The spacing between characters, as a fraction of the character width.",
     )
+    parser.add_argument(
+        "--stagger",
+        type=float,
+        default=0.0,
+        help="The amount to add to the height of even-indexed characters.",
+    )
 
     args: argparse.Namespace = parser.parse_args()
 
     output_filename = f"{args.name}.stl"
     output_path = os.path.join(GENERATED_DIR, output_filename)
 
-    name_to_stl(args.name, args.font, args.height, args.scale, args.spacing).export(
-        output_path
-    )
+    name_to_stl(
+        args.name, args.font, args.height, args.scale, args.spacing, args.stagger
+    ).export(output_path)
 
     print(f"Successfully generated and saved STL to {output_path}")
