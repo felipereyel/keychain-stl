@@ -6,7 +6,9 @@ from trimesh.path.entities import Line
 import os
 
 
-def char_to_mesh(text_char, font_path, height, scale_factor=1.0):
+def char_to_mesh(
+    text_char: str, font_path: str, height: float, scale_factor: float = 1.0
+) -> trimesh.Trimesh:
     """
     Generates an extruded 3D STL mesh from a single character using trimesh
     and fontTools for font parsing.
