@@ -22,10 +22,10 @@ This will download the font, extract the `.ttf` file, rename it to `pacifico.ttf
 
 ## Usage
 
-To generate STL files for all uppercase and lowercase characters from a font, run the `generator.py` script with the following arguments:
+To generate STL files for all uppercase and lowercase characters from a font, run the `letters_generator.py` script with the following arguments:
 
 ```bash
-uv run generator.py --font <path_to_font_file> --height <extrusion_height> --scale <scale_factor>
+uv run letters_generator.py --font <path_to_font_file> --height <extrusion_height> --scale <scale_factor>
 ```
 
 **Arguments:**
@@ -36,7 +36,7 @@ uv run generator.py --font <path_to_font_file> --height <extrusion_height> --sca
 **Example:**
 
 ```bash
-uv run generator.py --font fonts/pacifico.ttf --height 10 --scale 1.0
+uv run letters_generator.py --font fonts/pacifico.ttf --height 10 --scale 1.0
 ```
 
 This will generate `upper_A.stl` through `lower_z.stl` in the `generated/` directory.
@@ -54,7 +54,7 @@ uv run name_generator.py --name <name> --font <path_to_font_file> --height <extr
 *   `--font`: The file path to the .ttf or .otf font file. (Required)
 *   `--height`: The desired Z-axis extrusion height (thickness) in millimeters. (Default: 5.0)
 *   `--scale`: The factor by which to scale the characters. (Default: 1.0)
-*   `--spacing`: The spacing between characters, as a fraction of the character width. (Default: 0.1)
+*   `--spacing`: The spacing between characters, as a fraction of the character width. (Default: -0.1)
 *   `--stagger`: The amount to add to the height of even-indexed characters. (Default: 0.0)
 
 **Example:**
@@ -64,3 +64,33 @@ uv run name_generator.py --name Gemini --font fonts/pacifico.ttf --height 10 --s
 ```
 
 This will generate `Gemini.stl` in the `generated/` directory.
+
+## SVG Generation
+
+To generate an STL file from an SVG file, run the `svg_generator.py` script:
+
+```bash
+uv run svg_generator.py --svg <path_to_svg> --height <extrusion_height> --scale <scale_factor> --output <output_filename>
+```
+
+**Arguments:**
+*   `--svg`: The file path to the SVG file. (Required)
+*   `--height`: The desired Z-axis extrusion height (thickness) in millimeters. (Default: 5.0)
+*   `--scale`: The factor by which to scale the SVG. (Default: 1.0)
+*   `--output`: Output filename (saved in `generated/`). Defaults to the SVG filename with `.stl` extension.
+
+**Examples:**
+
+```bash
+# Generate from alien.svg, scale up 10x
+uv run svg_generator.py --svg alien.svg --scale 10
+
+# Custom height and output name
+uv run svg_generator.py --svg alien.svg --height 3 --scale 8 --output keychain.stl
+```
+
+**Supported SVG elements:** `<path>`, `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`
+
+**Path commands:** `M`/`m`, `L`/`l`, `H`/`h`, `V`/`v`, `C`/`c`, `S`/`s`, `Q`/`q`, `T`/`t`, `A`/`a`, `Z`/`z`
+
+Curves (beziers and arcs) are automatically sampled to line segments during extrusion.
