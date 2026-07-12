@@ -78,6 +78,14 @@ uv run svg_generator.py --svg <path_to_svg> --height <extrusion_height> --scale 
 *   `--height`: The desired Z-axis extrusion height (thickness) in millimeters. (Default: 5.0)
 *   `--scale`: The factor by which to scale the SVG. (Default: 1.0)
 *   `--output`: Output filename (saved in `generated/`). Defaults to the SVG filename with `.stl` extension.
+*   `--border-width`: Width of the border (baseplate) around the shape in SVG units. (Default: 0.0)
+*   `--border-height`: Extrusion height of the border. Defaults to half of `--height`.
+
+When `--border-width > 0`, the output is a stepped two-layer model:
+- A **baseplate** at half height that extends `border-width` beyond the shape
+- The **main shape** rises from the baseplate to the full height
+
+> **Note:** The baseplate fills any interior holes in the SVG (e.g., the counter of a letter "A" or "O"). Without a border, those holes remain open as through-holes.
 
 **Examples:**
 
@@ -87,6 +95,12 @@ uv run svg_generator.py --svg alien.svg --scale 10
 
 # Custom height and output name
 uv run svg_generator.py --svg alien.svg --height 3 --scale 8 --output keychain.stl
+
+# With a 3mm border at default half-height
+uv run svg_generator.py --svg alien.svg --scale 10 --border-width 3
+
+# With a 3mm border at custom 2mm height
+uv run svg_generator.py --svg alien.svg --scale 10 --border-width 3 --border-height 2
 ```
 
 **Supported SVG elements:** `<path>`, `<rect>`, `<circle>`, `<ellipse>`, `<polygon>`, `<polyline>`

@@ -362,58 +362,21 @@ def _circle_to_contours(el) -> list[np.ndarray]:
     return _ellipse_to_contours(el)
 
 
-def svg_to_mesh(
-    svg_path: str,
+def _contours_to_mesh(
+    contours: list[np.ndarray],
     height: float,
     scale_factor: float = 1.0,
 ) -> trimesh.Trimesh:
-    """Convert an SVG file to an extruded 3D mesh.
-
-    Supports ``<path>``, ``<rect>``, ``<circle>``, ``<ellipse>``,
-    ``<polygon>``, and ``<polyline>`` elements.
-
-    Args:
-        svg_path: Path to the SVG file.
-        height: Extrusion thickness (Z-axis).
-        scale_factor: Uniform scale applied before extrusion.
-
-    Returns:
-        A closed ``trimesh.Trimesh`` ready for STL export.
-    """
-    tree = ET.parse(svg_path)
-    root = tree.getroot()
-
-    ns = {"svg": "http://www.w3.org/2000/svg"}
-
-    all_contours: list[np.ndarray] = []
-    for local_tag in ("path", "rect", "circle", "ellipse", "polygon", "polyline"):
-        elems = root.findall(f".//svg:{local_tag}", ns) + root.findall(f".//{local_tag}")
-        for el in elems:
-            if local_tag == "path":
-                d = el.get("d")
-                if not d:
-                    continue
-                cmds = parse_svg_path_d(d)
-                all_contours.extend(_sample_commands(cmds))
-            elif local_tag == "rect":
-                all_contours.extend(_rect_to_contours(el))
-            elif local_tag == "circle":
-                all_contours.extend(_circle_to_contours(el))
-            elif local_tag == "ellipse":
-                all_contours.extend(_ellipse_to_contours(el))
-            elif local_tag in ("polygon", "polyline"):
-                contour = _parse_points_attr(el)
-                if contour is not None:
-                    all_contours.append(contour)
-
-    if not all_contours:
-        raise ValueError(f"No drawable elements found in {svg_path}")
-
-    # Build Path2D objects (one per contour)
+    """Build a ``Path2D`` from contour arrays and extrude it."""
     paths = []
-    for contour in all_contours:
+    for contour in contours:
         if len(contour) < 3:
             continue
+        # Strip trailing duplicate-close point (some contours have it from Z)
+        if len(contour) > 3 and np.array_equal(contour[0], contour[-1]):
+            contour = contour[:-1]
+            if len(contour) < 3:
+                continue
         entities = []
         for k in range(len(contour) - 1):
             entities.append(Line([k, k + 1]))
@@ -421,7 +384,7 @@ def svg_to_mesh(
         paths.append(Path2D(entities=entities, vertices=contour))
 
     if not paths:
-        raise ValueError("No valid contours (min 3 points) found in SVG")
+        raise ValueError("No valid contours (min 3 points)")
 
     path_2d = trimesh.path.util.concatenate(paths)
     path_2d.apply_scale(scale_factor)
@@ -430,3 +393,143 @@ def svg_to_mesh(
     return (
         trimesh.util.concatenate(extruded) if isinstance(extruded, list) else extruded
     )
+
+
+def _shapely_to_contours(geom) -> list[np.ndarray]:
+    """Convert a shapely geometry to contour arrays (exterior + holes)."""
+    import shapely
+
+    contours: list[np.ndarray] = []
+    gid = shapely.get_type_id(geom)
+
+    if gid == 3:  # Polygon
+        contours.append(np.array(geom.exterior.coords, dtype=np.float64))
+        for interior in geom.interiors:
+            contours.append(np.array(interior.coords, dtype=np.float64))
+    elif gid == 6:  # MultiPolygon
+        for poly in geom.geoms:
+            contours.extend(_shapely_to_contours(poly))
+    elif gid == 7:  # GeometryCollection
+        for g in geom.geoms:
+            contours.extend(_shapely_to_contours(g))
+
+    return contours
+
+
+def _make_border_mesh(
+    contours: list[np.ndarray],
+    border_width: float,
+    border_height: float,
+    scale_factor: float = 1.0,
+) -> trimesh.Trimesh | None:
+    """Create a solid baseplate mesh from the buffered union of *contours*.
+
+    The baseplate fills the entire buffered area (no inner hole) so the
+    resulting mesh is a simple manifold without seam issues.
+    """
+    from shapely import Polygon, union_all
+
+    polygons = [Polygon(c) for c in contours if len(c) >= 3]
+    if not polygons:
+        return None
+
+    shape = union_all(polygons) if len(polygons) > 1 else polygons[0]
+    expanded = shape.buffer(border_width, resolution=_CURVE_SAMPLES // 2)
+
+    if expanded.is_empty:
+        return None
+
+    border_contours = _shapely_to_contours(expanded)
+    return (
+        _contours_to_mesh(border_contours, border_height, scale_factor)
+        if border_contours
+        else None
+    )
+
+
+def _extract_contours(root: ET.Element) -> list[np.ndarray]:
+    """Extract all closed contour arrays from SVG elements under *root*."""
+    ns = {"svg": "http://www.w3.org/2000/svg"}
+    contours: list[np.ndarray] = []
+
+    for local_tag in ("path", "rect", "circle", "ellipse", "polygon", "polyline"):
+        elems = root.findall(f".//svg:{local_tag}", ns) + root.findall(
+            f".//{local_tag}"
+        )
+        for el in elems:
+            if local_tag == "path":
+                d = el.get("d")
+                if not d:
+                    continue
+                cmds = parse_svg_path_d(d)
+                contours.extend(_sample_commands(cmds))
+            elif local_tag == "rect":
+                contours.extend(_rect_to_contours(el))
+            elif local_tag == "circle":
+                contours.extend(_circle_to_contours(el))
+            elif local_tag == "ellipse":
+                contours.extend(_ellipse_to_contours(el))
+            elif local_tag in ("polygon", "polyline"):
+                contour = _parse_points_attr(el)
+                if contour is not None:
+                    contours.append(contour)
+
+    return contours
+
+
+def svg_to_mesh(
+    svg_path: str,
+    height: float,
+    scale_factor: float = 1.0,
+    border_width: float = 0.0,
+    border_height: float | None = None,
+) -> trimesh.Trimesh:
+    """Convert an SVG file to an extruded 3D mesh.
+
+    Supports ``<path>``, ``<rect>``, ``<circle>``, ``<ellipse>``,
+    ``<polygon>``, and ``<polyline>`` elements.
+
+    When *border_width* > 0 a border ring is generated around the
+    combined shape and extruded at *border_height* (defaults to
+    ``height / 2``).  The border sits at z=0 alongside the main shape,
+    creating a stepped outline.
+
+    Args:
+        svg_path: Path to the SVG file.
+        height: Extrusion thickness (Z-axis) for the main shape.
+        scale_factor: Uniform scale applied before extrusion.
+        border_width: Offset distance for the outer border (0 = no border).
+        border_height: Extrusion height for the border ring.  Defaults to
+                       ``height / 2`` when *border_width* > 0.
+
+    Returns:
+        A closed ``trimesh.Trimesh`` ready for STL export.
+    """
+    tree = ET.parse(svg_path)
+    root = tree.getroot()
+
+    all_contours = _extract_contours(root)
+
+    if not all_contours:
+        raise ValueError(f"No drawable elements found in {svg_path}")
+
+    meshes: list[trimesh.Trimesh] = []
+
+    if border_width > 0:
+        bh = height / 2 if border_height is None else border_height
+
+        border = _make_border_mesh(all_contours, border_width, bh, scale_factor)
+        if border is not None:
+            meshes.append(border)
+
+        inner_h = height - bh
+        if inner_h > 0:
+            inner = _contours_to_mesh(all_contours, inner_h, scale_factor)
+            inner.apply_transform(
+                trimesh.transformations.translation_matrix([0, 0, bh])
+            )
+            meshes.append(inner)
+    else:
+        meshes.append(_contours_to_mesh(all_contours, height, scale_factor))
+
+    return trimesh.util.concatenate(meshes) if len(meshes) > 1 else meshes[0]

@@ -37,11 +37,32 @@ if __name__ == "__main__":
             "Defaults to the SVG filename with .stl extension."
         ),
     )
+    parser.add_argument(
+        "--border-width",
+        type=float,
+        default=0.0,
+        help="Width of the border ring around the shape (0 = no border).",
+    )
+    parser.add_argument(
+        "--border-height",
+        type=float,
+        default=None,
+        help=(
+            "Extrusion height of the border ring. "
+            "Defaults to half of --height."
+        ),
+    )
 
     args = parser.parse_args()
 
     output = args.output or os.path.splitext(os.path.basename(args.svg))[0] + ".stl"
     output_path = os.path.join("generated", output)
 
-    svg_to_mesh(args.svg, args.height, args.scale).export(output_path)
+    svg_to_mesh(
+        args.svg,
+        args.height,
+        args.scale,
+        border_width=args.border_width,
+        border_height=args.border_height,
+    ).export(output_path)
     print(f"Successfully generated and saved STL to {output_path}")
